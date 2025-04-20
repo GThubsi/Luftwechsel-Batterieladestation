@@ -82,6 +82,15 @@
             position: absolute;
             left: -9999px;
         }
+        ul.details {
+            margin-top: 5px;
+            padding-left: 20px;
+        }
+        .normen-hinweis {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -197,7 +206,8 @@
         </div>
         
         <div class="result-item">
-            <strong>Explosionsschutzmaßnahmen:</strong> <span id="res_ex_schutz">-</span>
+            <strong>Explosionsschutzmaßnahmen:</strong> 
+            <div id="res_ex_schutz">-</div>
         </div>
         
         <div class="result-item">
@@ -210,13 +220,9 @@
     <div id="report"></div>
 
     <script>
-        // PDF-Bibliothek initialisieren
         const { jsPDF } = window.jspdf;
         
-        // Event Listener für Berechnen-Button
         document.getElementById('calculate-btn').addEventListener('click', berechnen);
-        
-        // Event Listener für PDF-Button
         document.getElementById('pdf-button').addEventListener('click', generatePDF);
 
         function validateInputs() {
@@ -237,10 +243,52 @@
             return true;
         }
 
+        function getExplosionsschutzDetails(ex_zone, batterietyp) {
+            const details = {
+                maßnahmen: [],
+                normen: [
+                    "EX-RL 2014/34/EU (ATEX-Richtlinie)",
+                    "Verordnung explosionsfähige Atmosphären (VEXAT)"
+                ],
+                quellen: [
+                    "Bundesministerium für Digitalisierung und Wirtschaftsstandort (BMDW)",
+                    "Arbeitsinspektion Österreich"
+                ]
+            };
+
+            if (ex_zone === "0" || ex_zone === "1") {
+                details.maßnahmen.push(
+                    "Verwendung von Geräten der Kategorie 1G (Zone 0) bzw. 2G (Zone 1) gemäß ATEX",
+                    "Einsatz von druckfest gekapselten Geräten (Typ 'd') oder Fremdbelüftung (Typ 'p')",
+                    "Kontinuierliche Gaswarneinrichtung mit automatischer Abschaltung (Mindestanforderung: 2 unabhängige Sensoren)",
+                    "Elektrostatik-Schutzmaßnahmen (erdungsfähige Bodenbeläge, antistatische Kleidung)"
+                );
+                details.normen.push("TRVB 600 Teil 5-3", "ÖNORM EN 60079-0");
+            } 
+            else if (ex_zone === "2") {
+                details.maßnahmen.push(
+                    "Geräte der Kategorie 3G gemäß ATEX einsetzen",
+                    "Eigensichere Stromkreise (Typ 'i') bevorzugen",
+                    "Örtliche Begasungsüberwachung mit optischem/alarmierendem Warngerät (Schwellwert: 10% UEG)",
+                    "Regelmäßige Funktionsprüfungen der Sicherheitseinrichtungen (mind. jährlich durch befähigte Person)"
+                );
+                details.normen.push("ÖNORM EN 60079-14", "ÖVE/ÖNORM EN 1127-1");
+            }
+
+            if (batterietyp === "lithium") {
+                details.maßnahmen.push(
+                    "Thermische Überwachung der Ladeplätze mit Temperatursensoren (Alarmschwelle: 60°C)",
+                    "Brandschutzmaßnahmen nach TRVB S 155 (Lithium-Batterien: Klasse D-Löscher in 15m Entfernung)"
+                );
+                details.normen.push("TRVB S 155", "ÖNORM F 3070");
+            }
+
+            return details;
+        }
+
         function berechnen() {
             if (!validateInputs()) return;
 
-            // Werte aus Formular auslesen
             const laenge = parseFloat(document.getElementById('raumlaenge').value);
             const breite = parseFloat(document.getElementById('raumbreite').value);
             const hoehe = parseFloat(document.getElementById('raumhoehe').value);
@@ -254,17 +302,15 @@
             const max_h2 = parseFloat(document.getElementById('max_h2').value) / 100;
             const ex_zone = document.getElementById('ex_zone').value;
 
-            // Berechnungen durchführen
             const raumvolumen = laenge * breite * hoehe;
             const h2_gesamt = h2_rate * anzahl;
-            const luftwechsel_min = h2_gesamt / (raumvolumen * max_h2);
+            const luftwechsel_min = h2_gesamt / (raumvolumen * (max_h2 <= 0 ? 0.01 : max_h2));
             
             let luftwechsel_empfohlen = Math.max(6, luftwechsel_min);
             if (ladeverfahren === 'schnell') luftwechsel_empfohlen = Math.max(12, luftwechsel_min);
             
             const lueftungsleistung = raumvolumen * luftwechsel_empfohlen;
             
-            // Maßnahmen bestimmen
             let ex_schutz = "Keine besonderen Maßnahmen";
             if (ex_zone === "0" || ex_zone === "1") {
                 ex_schutz = "Ex-geschützte Geräte nach ATEX erforderlich";
@@ -272,74 +318,162 @@
                 ex_schutz = "Ex-geschützte Geräte empfohlen";
             }
             
+            const ex_details = getExplosionsschutzDetails(ex_zone, batterietyp);
+            
             let massnahmen = [];
-            if (batterietyp === "blei") massnahmen.push("Neutralisationsmittel für Säurespritzer");
+            if (batterietyp === "blei") massnahmen.push("Neutralisationsmittel für Säurespritzer (pH 7-9)");
             if (batterietyp === "lithium") massnahmen.push("Lithium-Brandschutz (Klasse D-Löscher)");
-            if (lueftungstyp === "natuerlich") massnahmen.push("Mechanische Lüftung nachrüsten");
+            if (lueftungstyp === "natuerlich") massnahmen.push("Mechanische Lüftung nachrüsten (Mindestanforderung: 6 Luftwechsel/h)");
 
-            // Ergebnisse anzeigen
             document.getElementById('res_raumvolumen').textContent = raumvolumen.toFixed(2);
             document.getElementById('res_h2_gesamt').textContent = h2_gesamt.toFixed(4);
             document.getElementById('res_luftwechsel_min').textContent = luftwechsel_min.toFixed(3);
             document.getElementById('res_luftwechsel_empfohlen').textContent = luftwechsel_empfohlen.toFixed(1);
             document.getElementById('res_lueftungsleistung').textContent = Math.ceil(lueftungsleistung);
-            document.getElementById('res_ex_schutz').textContent = ex_schutz;
-            document.getElementById('res_massnahmen').textContent = massnahmen.join(", ") || "Keine zusätzlichen Maßnahmen";
             
-            // Ergebnis anzeigen und PDF-Button aktivieren
+            document.getElementById('res_ex_schutz').innerHTML = `
+                <strong>${ex_schutz}</strong>
+                <ul class="details">
+                    ${ex_details.maßnahmen.map(m => `<li>${m}</li>`).join('')}
+                </ul>
+                <div class="normen-hinweis">
+                    <strong>Rechtsgrundlagen:</strong> ${ex_details.normen.join(', ')}<br>
+                    <strong>Quellen:</strong> ${ex_details.quellen.join(', ')}
+                </div>
+            `;
+            
+            document.getElementById('res_massnahmen').textContent = massnahmen.join(", ") || "Keine zusätzlichen Maßnahmen";
             document.getElementById('result').style.display = 'block';
             document.getElementById('pdf-button').style.display = 'inline-block';
             
-            // Bericht für PDF vorbereiten
             prepareReport();
         }
 
         function prepareReport() {
             const report = document.getElementById('report');
+            const ex_details = getExplosionsschutzDetails(
+                document.getElementById('ex_zone').value,
+                document.getElementById('batterietyp').value
+            );
+
             report.innerHTML = `
-                <div style="padding: 20px; font-family: Arial, sans-serif;">
+                <div style="padding: 20px; font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
                     <h1 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">
                         Technischer Bericht: Lüftungsberechnung Batterieladestation
                     </h1>
                     
-                    <h2 style="color: #2c3e50;">1. Eingabeparameter</h2>
+                    <h2 style="color: #2c3e50; margin-top: 20px;">1. Projektdaten</h2>
+                    <p><strong>Erstellt am:</strong> ${new Date().toLocaleDateString('de-AT', {day: '2-digit', month: '2-digit', year: 'numeric'})}</p>
+                    
+                    <h2 style="color: #2c3e50; margin-top: 20px;">2. Eingabeparameter</h2>
                     
                     <h3 style="color: #3498db;">Raumabmessungen</h3>
-                    <p><strong>Länge:</strong> ${document.getElementById('raumlaenge').value} m</p>
-                    <p><strong>Breite:</strong> ${document.getElementById('raumbreite').value} m</p>
-                    <p><strong>Höhe:</strong> ${document.getElementById('raumhoehe').value} m</p>
-                    <p><strong>Lüftungstyp:</strong> ${document.getElementById('lueftungstyp').options[document.getElementById('lueftungstyp').selectedIndex].text}</p>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee; width: 50%;">Länge</td>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">${document.getElementById('raumlaenge').value} m</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">Breite</td>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">${document.getElementById('raumbreite').value} m</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">Höhe</td>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">${document.getElementById('raumhoehe').value} m</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">Lüftungstyp</td>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">${document.getElementById('lueftungstyp').options[document.getElementById('lueftungstyp').selectedIndex].text}</td>
+                        </tr>
+                    </table>
                     
-                    <h3 style="color: #3498db;">Batteriedaten</h3>
-                    <p><strong>Batterietyp:</strong> ${document.getElementById('batterietyp').options[document.getElementById('batterietyp').selectedIndex].text}</p>
-                    <p><strong>Kapazität:</strong> ${document.getElementById('batteriekapazitaet').value} Ah</p>
-                    <p><strong>Spannung:</strong> ${document.getElementById('batteriespannung').value} V</p>
-                    <p><strong>Anzahl Batterien:</strong> ${document.getElementById('anzahl_batterien').value}</p>
+                    <h3 style="color: #3498db; margin-top: 15px;">Batteriedaten</h3>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee; width: 50%;">Batterietyp</td>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">${document.getElementById('batterietyp').options[document.getElementById('batterietyp').selectedIndex].text}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">Kapazität</td>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">${document.getElementById('batteriekapazitaet').value} Ah</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">Spannung</td>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">${document.getElementById('batteriespannung').value} V</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">Anzahl Batterien</td>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">${document.getElementById('anzahl_batterien').value}</td>
+                        </tr>
+                    </table>
                     
-                    <h3 style="color: #3498db;">Lade- und Sicherheitsparameter</h3>
-                    <p><strong>Ladeverfahren:</strong> ${document.getElementById('ladeverfahren').options[document.getElementById('ladeverfahren').selectedIndex].text}</p>
-                    <p><strong>H₂-Freisetzung:</strong> ${document.getElementById('h2_rate').value} m³/h pro Batterie</p>
-                    <p><strong>Max. H₂-Konzentration:</strong> ${document.getElementById('max_h2').value}%</p>
-                    <p><strong>Explosionsschutzzone:</strong> ${document.getElementById('ex_zone').options[document.getElementById('ex_zone').selectedIndex].text}</p>
+                    <h3 style="color: #3498db; margin-top: 15px;">Lade- und Sicherheitsparameter</h3>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee; width: 50%;">Ladeverfahren</td>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">${document.getElementById('ladeverfahren').options[document.getElementById('ladeverfahren').selectedIndex].text}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">H₂-Freisetzung</td>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">${document.getElementById('h2_rate').value} m³/h pro Batterie</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">Max. H₂-Konzentration</td>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">${document.getElementById('max_h2').value}%</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">Explosionsschutzzone</td>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">${document.getElementById('ex_zone').options[document.getElementById('ex_zone').selectedIndex].text}</td>
+                        </tr>
+                    </table>
                     
-                    <h2 style="color: #2c3e50;">2. Berechnungsergebnisse</h2>
-                    <p><strong>Raumvolumen:</strong> ${document.getElementById('res_raumvolumen').textContent} m³</p>
-                    <p><strong>Gesamte H₂-Freisetzung:</strong> ${document.getElementById('res_h2_gesamt').textContent} m³/h</p>
-                    <p><strong>Minimaler Luftwechsel:</strong> ${document.getElementById('res_luftwechsel_min').textContent} 1/h</p>
-                    <p><strong>Empfohlener Luftwechsel:</strong> ${document.getElementById('res_luftwechsel_empfohlen').textContent} 1/h</p>
-                    <p><strong>Erforderliche Lüftungsleistung:</strong> ${document.getElementById('res_lueftungsleistung').textContent} m³/h</p>
-                    <p><strong>Explosionsschutzmaßnahmen:</strong> ${document.getElementById('res_ex_schutz').textContent}</p>
-                    <p><strong>Weitere Maßnahmen:</strong> ${document.getElementById('res_massnahmen').textContent}</p>
+                    <h2 style="color: #2c3e50; margin-top: 20px;">3. Berechnungsergebnisse</h2>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee; width: 50%;">Raumvolumen</td>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">${document.getElementById('res_raumvolumen').textContent} m³</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">Gesamte H₂-Freisetzung</td>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">${document.getElementById('res_h2_gesamt').textContent} m³/h</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">Minimaler Luftwechsel</td>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">${document.getElementById('res_luftwechsel_min').textContent} 1/h</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">Empfohlener Luftwechsel</td>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">${document.getElementById('res_luftwechsel_empfohlen').textContent} 1/h</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">Erforderliche Lüftungsleistung</td>
+                            <td style="padding: 5px; border-bottom: 1px solid #eee;">${document.getElementById('res_lueftungsleistung').textContent} m³/h</td>
+                        </tr>
+                    </table>
                     
-                    <h2 style="color: #2c3e50;">3. Empfehlungen</h2>
-                    <p>Diese Berechnung wurde gemäß folgenden Normen durchgeführt:</p>
+                    <h2 style="color: #2c3e50; margin-top: 20px;">4. Sicherheitsmaßnahmen</h2>
+                    
+                    <h3 style="color: #3498db;">Explosionsschutz</h3>
+                    <p><strong>${document.getElementById('ex_zone').options[document.getElementById('ex_zone').selectedIndex].text === "Keine" ? "Keine besonderen Maßnahmen" : document.getElementById('res_ex_schutz').textContent.split('\n')[0]}</strong></p>
                     <ul>
-                        <li>TRVB 600 (Brandschutzrichtlinie Österreich)</li>
-                        <li>ÖNORM EN 50604 (Ladeinfrastruktur)</li>
-                        <li>Arbeitsstättenverordnung (AStV)</li>
+                        ${ex_details.maßnahmen.map(m => `<li>${m}</li>`).join('')}
                     </ul>
                     
-                    <p style="margin-top: 30px;"><strong>Erstellt am:</strong> ${new Date().toLocaleDateString('de-AT')}</p>
+                    <h3 style="color: #3498db;">Weitere Maßnahmen</h3>
+                    <p>${document.getElementById('res_massnahmen').textContent || "Keine zusätzlichen Maßnahmen"}</p>
+                    
+                    <h2 style="color: #2c3e50; margin-top: 20px;">5. Rechtsgrundlagen</h2>
+                    <ul>
+                        ${ex_details.normen.map(n => `<li>${n}</li>`).join('')}
+                    </ul>
+                    
+                    <h2 style="color: #2c3e50; margin-top: 20px;">6. Quellen</h2>
+                    <p>${ex_details.quellen.join(', ')}</p>
+                    
+                    <div style="margin-top: 40px; font-size: 0.8em; color: #666; border-top: 1px solid #ddd; padding-top: 10px;">
+                        <p>Dieser Bericht wurde automatisch generiert am ${new Date().toLocaleString('de-AT')}.</p>
+                        <p>© ${new Date().getFullYear()} Batterieladestation Lüftungsrechner - Gemäß österreichischer Richtlinien</p>
+                    </div>
                 </div>
             `;
         }
@@ -348,13 +482,17 @@
             const report = document.getElementById('report');
             const pdf = new jsPDF('p', 'mm', 'a4');
             
-            html2canvas(report).then(canvas => {
+            html2canvas(report, {
+                scale: 2,
+                logging: false,
+                useCORS: true
+            }).then(canvas => {
                 const imgData = canvas.toDataURL('image/png');
                 const pdfWidth = pdf.internal.pageSize.getWidth();
                 const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
                 
                 pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-                pdf.save(`Lueftungsberechnung_${new Date().toISOString().slice(0,10)}.pdf`);
+                pdf.save(`Lueftungsberechnung_Batterieladestation_${new Date().toISOString().slice(0,10)}.pdf`);
             });
         }
     </script>
