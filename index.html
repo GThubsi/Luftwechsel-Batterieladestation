@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Luftwechselrechner für Batterieladestationen (Österreich)</title>
+    <title>Batterieladestation Lüftungsrechner (Österreich)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         body {
-            font-family: 'Segoe UI', Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             line-height: 1.6;
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             padding: 20px;
             color: #333;
@@ -18,6 +20,12 @@
             border-bottom: 2px solid #3498db;
             padding-bottom: 10px;
         }
+        .form-section {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
         .form-group {
             margin-bottom: 15px;
         }
@@ -26,11 +34,12 @@
             margin-bottom: 5px;
             font-weight: bold;
         }
-        input {
+        input, select {
             width: 100%;
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
+            box-sizing: border-box;
         }
         button {
             background-color: #3498db;
@@ -40,81 +49,280 @@
             border-radius: 4px;
             cursor: pointer;
             font-size: 16px;
+            margin-right: 10px;
         }
         button:hover {
             background-color: #2980b9;
         }
         #result {
             margin-top: 20px;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
+            padding: 20px;
+            background-color: #e8f4fc;
+            border-radius: 8px;
             display: none;
         }
-        .norm {
-            background-color: #e8f4fc;
-            padding: 15px;
-            border-left: 4px solid #3498db;
+        .result-item {
+            margin-bottom: 10px;
+        }
+        #report {
             margin-top: 30px;
+        }
+        .hidden {
+            display: none;
+        }
+        .two-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .two-columns {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>Luftwechselrechner für Batterieladestationen</h1>
-    <p>Berechnung gemäß österreichischen Normen (TRVB 600, ÖNORM EN 50604)</p>
+    <h1>Batterieladestation Lüftungsberechnung</h1>
+    <p>Gemäß österreichischer Normen (TRVB 600, ÖNORM EN 50604, AStV)</p>
 
-    <div class="form-group">
-        <label for="raumvolumen">Raumvolumen (m³):</label>
-        <input type="number" id="raumvolumen" placeholder="z.B. 60">
+    <div class="form-section">
+        <h2>1. Raumabmessungen</h2>
+        <div class="two-columns">
+            <div class="form-group">
+                <label for="raumlaenge">Länge (m):</label>
+                <input type="number" id="raumlaenge" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label for="raumbreite">Breite (m):</label>
+                <input type="number" id="raumbreite" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label for="raumhoehe">Höhe (m):</label>
+                <input type="number" id="raumhoehe" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label for="lueftungstyp">Lüftungstyp:</label>
+                <select id="lueftungstyp" required>
+                    <option value="mechanisch">Mechanisch</option>
+                    <option value="natuerlich">Natürlich</option>
+                </select>
+            </div>
+        </div>
     </div>
 
-    <div class="form-group">
-        <label for="h2-rate">Wasserstoff-Freisetzungsrate (m³/h):</label>
-        <input type="number" id="h2-rate" step="0.01" placeholder="z.B. 0.05">
+    <div class="form-section">
+        <h2>2. Batteriedaten</h2>
+        <div class="two-columns">
+            <div class="form-group">
+                <label for="batterietyp">Batterietyp:</label>
+                <select id="batterietyp" required>
+                    <option value="blei">Blei-Säure</option>
+                    <option value="lithium">Lithium-Ion</option>
+                    <option value="nickel">Nickel-Cadmium</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="batteriekapazitaet">Kapazität (Ah):</label>
+                <input type="number" id="batteriekapazitaet" step="1" required>
+            </div>
+            <div class="form-group">
+                <label for="batteriespannung">Spannung (V):</label>
+                <input type="number" id="batteriespannung" step="1" required>
+            </div>
+            <div class="form-group">
+                <label for="anzahl_batterien">Anzahl gleichzeitig ladender Batterien:</label>
+                <input type="number" id="anzahl_batterien" min="1" value="1" required>
+            </div>
+        </div>
     </div>
 
-    <div class="form-group">
-        <label for="h2-konz">Max. zulässige H₂-Konzentration (%):</label>
-        <input type="number" id="h2-konz" value="1" step="0.1">
+    <div class="form-section">
+        <h2>3. Lade- und Sicherheitsparameter</h2>
+        <div class="two-columns">
+            <div class="form-group">
+                <label for="ladeverfahren">Ladeverfahren:</label>
+                <select id="ladeverfahren" required>
+                    <option value="normal">Normalladung</option>
+                    <option value="schnell">Schnellladung</option>
+                    <option value="erhaltung">Erhaltungsladung</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="h2_rate">H₂-Freisetzungsrate (m³/h pro Batterie):</label>
+                <input type="number" id="h2_rate" step="0.001" value="0.05" required>
+            </div>
+            <div class="form-group">
+                <label for="max_h2">Max. zulässige H₂-Konzentration (%):</label>
+                <input type="number" id="max_h2" step="0.01" value="1" required>
+            </div>
+            <div class="form-group">
+                <label for="ex_zone">Explosionsschutzzone:</label>
+                <select id="ex_zone" required>
+                    <option value="0">Zone 0</option>
+                    <option value="1">Zone 1</option>
+                    <option value="2" selected>Zone 2</option>
+                    <option value="keine">Keine</option>
+                </select>
+            </div>
+        </div>
     </div>
 
     <button onclick="berechnen()">Berechnen</button>
+    <button onclick="location.reload()">Zurücksetzen</button>
 
     <div id="result">
-        <h3>Ergebnis</h3>
-        <p><strong>Minimaler Luftwechsel:</strong> <span id="luftwechsel">-</span> 1/h</p>
-        <p><strong>Empfehlung:</strong> <span id="empfehlung">-</span></p>
+        <h2>Ergebnis der Lüftungsberechnung</h2>
+        
+        <div class="result-item">
+            <strong>Raumvolumen:</strong> <span id="res_raumvolumen">-</span> m³
+        </div>
+        
+        <div class="result-item">
+            <strong>Gesamte H₂-Freisetzung:</strong> <span id="res_h2_gesamt">-</span> m³/h
+        </div>
+        
+        <div class="result-item">
+            <strong>Minimaler Luftwechsel:</strong> <span id="res_luftwechsel_min">-</span> 1/h
+        </div>
+        
+        <div class="result-item">
+            <strong>Empfohlener Luftwechsel (Österreich):</strong> <span id="res_luftwechsel_empfohlen">-</span> 1/h
+        </div>
+        
+        <div class="result-item">
+            <strong>Erforderliche Lüftungsleistung:</strong> <span id="res_lueftungsleistung">-</span> m³/h
+        </div>
+        
+        <div class="result-item">
+            <strong>Explosionsschutzmaßnahmen:</strong> <span id="res_ex_schutz">-</span>
+        </div>
+        
+        <div class="result-item">
+            <strong>Weitere Maßnahmen:</strong> <span id="res_massnahmen">-</span>
+        </div>
+        
+        <button onclick="generatePDF()" id="pdf-button" class="hidden">PDF-Bericht erstellen</button>
     </div>
 
-    <div class="norm">
-        <h3>Relevante Normen (Österreich)</h3>
-        <ul>
-            <li>TRVB 600 (Brandschutzrichtlinie)</li>
-            <li>ÖNORM EN 50604 (Ladeinfrastruktur)</li>
-            <li>EN 62282-3-201 (Wasserstoffsicherheit)</li>
-        </ul>
+    <div id="report" class="hidden">
+        <!-- Hier wird der Bericht für PDF generiert -->
     </div>
 
     <script>
-        function berechnen() {
-            const V = parseFloat(document.getElementById('raumvolumen').value);
-            const Q_H2 = parseFloat(document.getElementById('h2-rate').value);
-            const C_max = parseFloat(document.getElementById('h2-konz').value) / 100;
+        const { jsPDF } = window.jspdf;
 
-            if (isNaN(V) || isNaN(Q_H2) || isNaN(C_max)) {
-                alert("Bitte alle Felder ausfüllen!");
+        function berechnen() {
+            // Raumabmessungen
+            const laenge = parseFloat(document.getElementById('raumlaenge').value);
+            const breite = parseFloat(document.getElementById('raumbreite').value);
+            const hoehe = parseFloat(document.getElementById('raumhoehe').value);
+            const lueftungstyp = document.getElementById('lueftungstyp').value;
+            
+            // Batteriedaten
+            const batterietyp = document.getElementById('batterietyp').value;
+            const kapazitaet = parseFloat(document.getElementById('batteriekapazitaet').value);
+            const spannung = parseFloat(document.getElementById('batteriespannung').value);
+            const anzahl = parseInt(document.getElementById('anzahl_batterien').value);
+            
+            // Lade- und Sicherheitsparameter
+            const ladeverfahren = document.getElementById('ladeverfahren').value;
+            const h2_rate = parseFloat(document.getElementById('h2_rate').value);
+            const max_h2 = parseFloat(document.getElementById('max_h2').value) / 100;
+            const ex_zone = document.getElementById('ex_zone').value;
+            
+            // Validierung
+            if (isNaN(laenge) {
+                alert("Bitte Raumlänge eingeben!");
                 return;
             }
-
-            // Berechnung
-            const n = Q_H2 / (V * C_max);
-            const n_empfohlen = Math.max(6, n).toFixed(1);
-
-            // Ergebnis anzeigen
-            document.getElementById('luftwechsel').textContent = n.toFixed(3);
-            document.getElementById('empfehlung').textContent = 
-                `Mindestens ${n_empfohlen} 1/h (mechanische Lüftung + H₂-Sensoren)`;
+            
+            // Berechnungen
+            const raumvolumen = laenge * breite * hoehe;
+            const h2_gesamt = h2_rate * anzahl;
+            const luftwechsel_min = h2_gesamt / (raumvolumen * max_h2);
+            
+            // Empfehlungen
+            let luftwechsel_empfohlen = Math.max(6, luftwechsel_min).toFixed(1);
+            if (ladeverfahren === 'schnell') luftwechsel_empfohlen = Math.max(12, luftwechsel_min).toFixed(1);
+            
+            const lueftungsleistung = raumvolumen * luftwechsel_empfohlen;
+            
+            // Explosionsschutz
+            let ex_schutz = "Keine besonderen Maßnahmen";
+            if (ex_zone === "0" || ex_zone === "1") {
+                ex_schutz = "Ex-geschützte Geräte nach ATEX erforderlich";
+            } else if (ex_zone === "2") {
+                ex_schutz = "Ex-geschützte Geräte empfohlen";
+            }
+            
+            // Weitere Maßnahmen
+            let massnahmen = [];
+            if (batterietyp === "blei") massnahmen.push("Neutralisationsmittel für Säurespritzer");
+            if (batterietyp === "lithium") massnahmen.push("Lithium-Brandschutz (Klasse D-Löscher)");
+            if (lueftungstyp === "natuerlich") massnahmen.push("Mechanische Lüftung nachrüsten");
+            
+            // Ergebnisse anzeigen
+            document.getElementById('res_raumvolumen').textContent = raumvolumen.toFixed(2);
+            document.getElementById('res_h2_gesamt').textContent = h2_gesamt.toFixed(4);
+            document.getElementById('res_luftwechsel_min').textContent = luftwechsel_min.toFixed(3);
+            document.getElementById('res_luftwechsel_empfohlen').textContent = luftwechsel_empfohlen;
+            document.getElementById('res_lueftungsleistung').textContent = lueftungsleistung.toFixed(0);
+            document.getElementById('res_ex_schutz').textContent = ex_schutz;
+            document.getElementById('res_massnahmen').textContent = massnahmen.join(", ") || "Keine zusätzlichen Maßnahmen";
+            
             document.getElementById('result').style.display = 'block';
+            document.getElementById('pdf-button').classList.remove('hidden');
+            
+            // Bericht für PDF vorbereiten
+            prepareReport();
+        }
+        
+        function prepareReport() {
+            const report = document.getElementById('report');
+            report.innerHTML = `
+                <h1>Technischer Bericht: Lüftungsberechnung Batterieladestation</h1>
+                <h2>1. Eingabeparameter</h2>
+                <h3>Raumabmessungen</h3>
+                <p>Länge: ${document.getElementById('raumlaenge').value} m</p>
+                <p>Breite: ${document.getElementById('raumbreite').value} m</p>
+                <p>Höhe: ${document.getElementById('raumhoehe').value} m</p>
+                <p>Lüftungstyp: ${document.getElementById('lueftungstyp').options[document.getElementById('lueftungstyp').selectedIndex].text}</p>
+                
+                <h3>Batteriedaten</h3>
+                <p>Batterietyp: ${document.getElementById('batterietyp').options[document.getElementById('batterietyp').selectedIndex].text}</p>
+                <p>Kapazität: ${document.getElementById('batteriekapazitaet').value} Ah</p>
+                <p>Spannung: ${document.getElementById('batteriespannung').value} V</p>
+                <p>Anzahl Batterien: ${document.getElementById('anzahl_batterien').value}</p>
+                
+                <h3>Lade- und Sicherheitsparameter</h3>
+                <p>Ladeverfahren: ${document.getElementById('ladeverfahren').options[document.getElementById('ladeverfahren').selectedIndex].text}</p>
+                <p>H₂-Freisetzung: ${document.getElementById('h2_rate').value} m³/h pro Batterie</p>
+                <p>Max. H₂-Konzentration: ${document.getElementById('max_h2').value}%</p>
+                <p>Explosionsschutzzone: ${document.getElementById('ex_zone').options[document.getElementById('ex_zone').selectedIndex].text}</p>
+                
+                <h2>2. Berechnungsergebnisse</h2>
+                ${document.getElementById('result').innerHTML.replace(/button/g, 'div')}
+                
+                <h2>3. Empfehlungen</h2>
+                <p>Datum: ${new Date().toLocaleDateString('de-AT')}</p>
+                <p>Berechnet gemäß TRVB 600 und ÖNORM EN 50604</p>
+            `;
+        }
+        
+        function generatePDF() {
+            const report = document.getElementById('report');
+            
+            html2canvas(report).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgProps = pdf.getImageProperties(imgData);
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                pdf.save(`Lüftungsberechnung_${new Date().toISOString().slice(0,10)}.pdf`);
+            });
         }
     </script>
 </body>
